@@ -8,7 +8,7 @@ import (
 	"github.com/trunov/gophermart/internal/app/util"
 )
 
-type DbStorager interface {
+type DBStorager interface {
 	Ping(ctx context.Context) error
 	RegisterUser(ctx context.Context, login, password string) error
 	AuthenticateUser(ctx context.Context, tokenAuth *jwtauth.JWTAuth, login, password string) (string, error)

@@ -36,11 +36,11 @@ type LoginRequest struct {
 }
 
 type Handler struct {
-	dbStorage postgres.DbStorager
+	dbStorage postgres.DBStorager
 	logger    zerolog.Logger
 }
 
-func NewHandler(dbStorage postgres.DbStorager, logger zerolog.Logger) *Handler {
+func NewHandler(dbStorage postgres.DBStorager, logger zerolog.Logger) *Handler {
 	return &Handler{dbStorage: dbStorage, logger: logger}
 }
 

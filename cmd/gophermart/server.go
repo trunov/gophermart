@@ -16,7 +16,7 @@ func StartServer(cfg config.Config) {
 	l := logger.Get()
 	ctx := context.Background()
 
-	var dbStorage postgres.DbStorager
+	var dbStorage postgres.DBStorager
 
 	if cfg.DatabaseURI != "" {
 		var err error
