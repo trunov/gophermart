@@ -20,6 +20,7 @@ func StartServer(cfg config.Config) {
 
 	if cfg.DatabaseURI != "" {
 		var err error
+
 		dbpool, err := pgxpool.Connect(ctx, cfg.DatabaseURI)
 		if err != nil {
 			l.Fatal().Err(err)
