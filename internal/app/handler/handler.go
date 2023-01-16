@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v4"
 	"github.com/rs/zerolog"
+	"github.com/trunov/gophermart/internal/app/luhn"
 	"github.com/trunov/gophermart/internal/app/postgres"
 	"github.com/trunov/gophermart/internal/app/util"
 )
@@ -61,7 +62,7 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.dbStorage.RegisterUser(ctx, regRequest.Login, regRequest.Password)
+	userID, err := h.dbStorage.RegisterUser(ctx, regRequest.Login, regRequest.Password)
 	if err != nil {
 		if strings.Contains(err.Error(), pgerrcode.UniqueViolation) {
 			h.logger.Info().Msg("User tried to register but this login is already in use: " + regRequest.Login)
@@ -74,7 +75,7 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := util.GenerateToken(tokenAuth, regRequest.Login)
+	token, err := util.GenerateToken(tokenAuth, userID)
 	if err != nil {
 		h.logger.Err(err).Msg("Something is wrong with jwt token generation")
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
@@ -114,6 +115,7 @@ func (h *Handler) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		h.logger.Err(err).Msg("Something went wrong")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -129,21 +131,45 @@ func (h *Handler) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *Handler) PingDB(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	orderNumber, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.logger.Err(err).Msg("CreateOrder. Something went wrong while reading body.")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		return
+	}
+
+	ok := luhn.Valid(string(orderNumber))
+	if !ok {
+		h.logger.Warn().Msg("CreateOrder. Order number is not valid")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
 	token, _, err := jwtauth.FromContext(r.Context())
 	if err != nil {
 		h.logger.Err(err).Msg("Something is wrong with reading jwt token from the context")
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 	}
 
-	login, ok := token.Get("login")
+	id, ok := token.Get("id")
 	if !ok {
 		h.logger.Error().Msg("Login data can not be found in token")
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 	}
 
-	fmt.Println(login)
+	err = h.dbStorage.CreateOrder(ctx, string(orderNumber), id.(string))
+	if err != nil {
+		h.logger.Err(err).Msg("Something is wrong with reading jwt token from the context")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
 
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (h *Handler) PingDB(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
 	if err := h.dbStorage.Ping(ctx); err != nil {
@@ -163,9 +189,10 @@ func NewRouter(h *Handler) chi.Router {
 		r.Use(jwtauth.Verifier(tokenAuth))
 		r.Use(jwtauth.Authenticator)
 
-		r.Get("/ping", h.PingDB)
+		r.Post("/api/user/orders", h.CreateOrder)
 	})
 
+	r.Get("/ping", h.PingDB)
 	r.Post("/api/user/register", h.RegisterUser)
 	r.Post("/api/user/login", h.AuthenticateUser)
 

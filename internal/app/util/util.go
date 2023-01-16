@@ -28,8 +28,9 @@ func Getenv(key, fallback string) string {
 	return value
 }
 
-func GenerateToken(tokenAuth *jwtauth.JWTAuth, login string) (string, error) {
-	_, token, err := tokenAuth.Encode(map[string]interface{}{"login": login})
+func GenerateToken(tokenAuth *jwtauth.JWTAuth, id string) (string, error) {
+	_, token, err := tokenAuth.Encode(map[string]interface{}{"id": id})
+
 	if err != nil {
 		return "", err
 	}
