@@ -3,12 +3,26 @@ package util
 import (
 	"errors"
 	"os"
+	"time"
 
 	"github.com/go-chi/jwtauth"
 	"golang.org/x/crypto/bcrypt"
 )
 
+type GetOrderResponse struct {
+	Number    string    `json:"number"`
+	Status    string    `json:"status"`
+	Accrual   float64   `json:"accrual,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type GetUserBalanceResponse struct {
+	Current   float64 `json:"current"`
+	Withdrawn float64 `json:"withdrawn"`
+}
+
 var ErrIncorrectPassword error = errors.New("password is incorrect")
+var ErrInsufficientAmount error = errors.New("insufficient amount of balance")
 
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

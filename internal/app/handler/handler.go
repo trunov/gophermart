@@ -36,6 +36,11 @@ type LoginRequest struct {
 	Password string `validate:"required" json:"password"`
 }
 
+type WithdrawRequest struct {
+	Order string  `validate:"required" json:"order"`
+	Sum   float64 `validate:"required" json:"sum"`
+}
+
 type Handler struct {
 	dbStorage postgres.DBStorager
 	logger    zerolog.Logger
@@ -83,7 +88,7 @@ func (h *Handler) RegisterUser(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		HttpOnly: true,
-		Expires:  time.Now().Add(1 * time.Minute),
+		Expires:  time.Now().Add(10 * time.Minute),
 		SameSite: http.SameSiteLaxMode,
 		Name:     "jwt",
 		Value:    token,
@@ -122,7 +127,7 @@ func (h *Handler) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		HttpOnly: true,
-		Expires:  time.Now().Add(1 * time.Minute),
+		Expires:  time.Now().Add(10 * time.Minute),
 		SameSite: http.SameSiteLaxMode,
 		Name:     "jwt",
 		Value:    token,
@@ -169,6 +174,119 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
+// TODO: fix error when user balance is null
+func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	token, _, err := jwtauth.FromContext(r.Context())
+	if err != nil {
+		h.logger.Err(err).Msg("Something is wrong with reading jwt token from the context")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
+
+	userID, ok := token.Get("id")
+	if !ok {
+		h.logger.Error().Msg("Login data can not be found in token")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
+
+	balance, err := h.dbStorage.GetUserBalance(ctx, userID.(string))
+	if err != nil {
+		h.logger.Err(err).Msg("GetUserBalance. Database failed to process sequel.")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(balance); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	token, _, err := jwtauth.FromContext(r.Context())
+	if err != nil {
+		h.logger.Err(err).Msg("Something is wrong with reading jwt token from the context")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
+
+	userID, ok := token.Get("id")
+	if !ok {
+		h.logger.Error().Msg("Login data can not be found in token")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
+
+	var wReq WithdrawRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&wReq); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = validator.New().Struct(wReq)
+	if err != nil {
+		h.logger.Err(err).Msg("Validation during registration error")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	ok = luhn.Valid(wReq.Order)
+	if !ok {
+		h.logger.Warn().Msg("Withdraw. Order number is not valid")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = h.dbStorage.Withdraw(ctx, wReq.Sum, userID.(string), wReq.Order)
+
+	if err != nil {
+		if err == util.ErrInsufficientAmount {
+			w.WriteHeader(http.StatusPaymentRequired)
+			return
+		}
+
+		h.logger.Err(err).Msg("Something went wrong")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) GetOrders(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	token, _, err := jwtauth.FromContext(r.Context())
+	if err != nil {
+		h.logger.Err(err).Msg("Something is wrong with reading jwt token from the context")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
+
+	userID, ok := token.Get("id")
+	if !ok {
+		h.logger.Error().Msg("Login data can not be found in token")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
+
+	orders, err := h.dbStorage.GetOrders(ctx, userID.(string))
+	if err != nil {
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		h.logger.Err(err).Msg("Get orders. Something went wrong with database.")
+	}
+
+	if len(orders) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(orders); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 func (h *Handler) PingDB(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -189,7 +307,11 @@ func NewRouter(h *Handler) chi.Router {
 		r.Use(jwtauth.Verifier(tokenAuth))
 		r.Use(jwtauth.Authenticator)
 
+		// TODO: refactor; group into /api/user and /balance
 		r.Post("/api/user/orders", h.CreateOrder)
+		r.Get("/api/user/orders", h.GetOrders)
+		r.Get("/api/user/balance", h.GetUserBalance)
+		r.Post("/api/user/balance/withdraw", h.Withdraw)
 	})
 
 	r.Get("/ping", h.PingDB)

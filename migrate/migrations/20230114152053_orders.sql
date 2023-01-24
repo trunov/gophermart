@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS orders
     number          VARCHAR(16) NOT NULL,
     status          SMALLINT NOT NULL,
     user_id         uuid REFERENCES users(id),
+    accrual         NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     created_at      TIMESTAMP NOT NULL DEFAULT now(),
     updated_at      TIMESTAMP NOT NULL DEFAULT now(),
     CONSTRAINT number UNIQUE (number)
