@@ -21,6 +21,12 @@ type GetUserBalanceResponse struct {
 	Withdrawn float64 `json:"withdrawn"`
 }
 
+type GetUserWithdrawalResponse struct {
+	Order       string    `json:"order"`
+	Sum         float64   `json:"sum"`
+	ProcessedAt time.Time `json:"processed_at"`
+}
+
 var ErrIncorrectPassword error = errors.New("password is incorrect")
 var ErrInsufficientAmount error = errors.New("insufficient amount of balance")
 

@@ -270,7 +270,7 @@ func (h *Handler) GetOrders(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 	}
 
-	orders, err := h.dbStorage.GetOrders(ctx, userID.(string))
+	orders, err := h.dbStorage.GetOrdersByUser(ctx, userID.(string))
 	if err != nil {
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 		h.logger.Err(err).Msg("Get orders. Something went wrong with database.")
@@ -282,6 +282,38 @@ func (h *Handler) GetOrders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(orders); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+
+	token, _, err := jwtauth.FromContext(r.Context())
+	if err != nil {
+		h.logger.Err(err).Msg("Something is wrong with reading jwt token from the context")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
+
+	userID, ok := token.Get("id")
+	if !ok {
+		h.logger.Error().Msg("Login data can not be found in token")
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	}
+
+	withdrawals, err := h.dbStorage.GetUserWithdrawals(ctx, userID.(string))
+	if err != nil {
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		h.logger.Err(err).Msg("Get orders. Something went wrong with database.")
+	}
+
+	if len(withdrawals) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(withdrawals); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -312,6 +344,7 @@ func NewRouter(h *Handler) chi.Router {
 		r.Get("/api/user/orders", h.GetOrders)
 		r.Get("/api/user/balance", h.GetUserBalance)
 		r.Post("/api/user/balance/withdraw", h.Withdraw)
+		r.Get("/api/user/withdrawals", h.GetWithdrawals)
 	})
 
 	r.Get("/ping", h.PingDB)

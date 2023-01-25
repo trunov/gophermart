@@ -20,9 +20,12 @@ type DBStorager interface {
 	RegisterUser(ctx context.Context, login, password string) (string, error)
 	AuthenticateUser(ctx context.Context, tokenAuth *jwtauth.JWTAuth, login, password string) (string, error)
 	CreateOrder(ctx context.Context, number, userID string) error
-	GetOrders(ctx context.Context, userID string) ([]util.GetOrderResponse, error)
+	GetOrdersByUser(ctx context.Context, userID string) ([]util.GetOrderResponse, error)
+	GetOrders(ctx context.Context) ([]util.GetOrderResponse, error)
+	UpdateOrder(ctx context.Context, orderNumber string, orderStatus int) error
 	GetUserBalance(ctx context.Context, userID string) (util.GetUserBalanceResponse, error)
 	Withdraw(ctx context.Context, sum float64, orderID, userID string) error
+	GetUserWithdrawals(ctx context.Context, userID string) ([]util.GetUserWithdrawalResponse, error)
 }
 
 type dbStorage struct {
@@ -39,6 +42,10 @@ func (s *dbStorage) Ping(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *dbStorage) UpdateOrder(ctx context.Context, orderNumber string, orderStatus int) error {
 	return nil
 }
 
@@ -97,10 +104,41 @@ func (s *dbStorage) CreateOrder(ctx context.Context, number, userID string) erro
 	return nil
 }
 
-func (s *dbStorage) GetOrders(ctx context.Context, userID string) ([]util.GetOrderResponse, error) {
+func (s *dbStorage) GetOrdersByUser(ctx context.Context, userID string) ([]util.GetOrderResponse, error) {
 	orders := []util.GetOrderResponse{}
 
 	rows, err := s.dbpool.Query(ctx, "SELECT number, status, accrual, updated_at from orders where user_id = $1", userID)
+	if err != nil {
+		return orders, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var order util.GetOrderResponse
+
+		var status int
+		err = rows.Scan(&order.Number, &status, &order.Accrual, &order.UpdatedAt)
+		if err != nil {
+			return orders, err
+		}
+		order.Status = OrderStatusesMap[status]
+
+		orders = append(orders, order)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return orders, err
+	}
+
+	return orders, nil
+}
+
+func (s *dbStorage) GetOrders(ctx context.Context) ([]util.GetOrderResponse, error) {
+	orders := []util.GetOrderResponse{}
+
+	rows, err := s.dbpool.Query(ctx, "SELECT number, status, accrual, updated_at from orders")
 	if err != nil {
 		return orders, err
 	}
@@ -142,6 +180,29 @@ func (s *dbStorage) GetUserBalance(ctx context.Context, userID string) (util.Get
 	}
 
 	return userBalance, nil
+}
+
+func (s *dbStorage) GetUserWithdrawals(ctx context.Context, userID string) ([]util.GetUserWithdrawalResponse, error) {
+	var userWithdrawals []util.GetUserWithdrawalResponse
+
+	rows, err := s.dbpool.Query(ctx, "SELECT order_id, amount, processed_at from withdrawal WHERE user_id = $1", userID)
+	if err != nil {
+		return userWithdrawals, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var userWithdrawal util.GetUserWithdrawalResponse
+		err = rows.Scan(&userWithdrawal.Order, &userWithdrawal.Sum, &userWithdrawal.ProcessedAt)
+		if err != nil {
+			return userWithdrawals, err
+		}
+
+		userWithdrawals = append(userWithdrawals, userWithdrawal)
+	}
+
+	return userWithdrawals, nil
 }
 
 func (s *dbStorage) Withdraw(ctx context.Context, sum float64, userID, orderID string) error {
