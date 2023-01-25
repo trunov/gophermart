@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type MyApiError struct {
+type MyAPIError struct {
 	Code      int       `json:"code"`
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
@@ -48,7 +48,7 @@ func (j *UpdateOrderJob) Run(ctx context.Context) error {
 	fmt.Printf("job %s has started\n", j.orderNumber)
 
 	// go to accrual service /api/orders/{number}
-	var responseErr MyApiError
+	var responseErr MyAPIError
 	var order OrderInfo
 
 	_, err := j.client.R().
