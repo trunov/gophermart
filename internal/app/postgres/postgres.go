@@ -99,8 +99,21 @@ func (s *dbStorage) AuthenticateUser(ctx context.Context, tokenAuth *jwtauth.JWT
 }
 
 func (s *dbStorage) CreateOrder(ctx context.Context, number, userID string) error {
-	// "NEW" order status corresponds to 1
-	_, err := s.dbpool.Exec(ctx, "INSERT INTO orders (number, user_id, status) values ($1, $2, $3)", number, userID, 1)
+	var queryUserID string
+	err := s.dbpool.QueryRow(ctx, "SELECT user_id from orders WHERE number = $1", number).Scan(&queryUserID)
+	if err != nil {
+		return err
+	}
+
+	if queryUserID == userID {
+		return util.ErrOrderLoadedByUser
+	}
+
+	if queryUserID != "" {
+		return util.ErrOrderLoadedByOtherUser
+	}
+
+	_, err = s.dbpool.Exec(ctx, "INSERT INTO orders (number, user_id, status) values ($1, $2, $3)", number, userID, 1)
 	if err != nil {
 		return err
 	}

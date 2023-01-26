@@ -37,6 +37,8 @@ type GetUserWithdrawalResponse struct {
 var ErrIncorrectPassword error = errors.New("password is incorrect")
 var ErrInsufficientAmount error = errors.New("insufficient amount of balance")
 var ErrNoKeyPresented error = errors.New("key was not found in the map")
+var ErrOrderLoadedByOtherUser error = errors.New("order already loaded by other user")
+var ErrOrderLoadedByUser error = errors.New("order already loaded by user")
 
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

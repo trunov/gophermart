@@ -167,6 +167,15 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = h.dbStorage.CreateOrder(ctx, string(orderNumber), id.(string))
 	if err != nil {
+		if err == util.ErrOrderLoadedByOtherUser {
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+
+		if err == util.ErrOrderLoadedByUser {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		h.logger.Err(err).Msg("Something is wrong with reading jwt token from the context")
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 	}
