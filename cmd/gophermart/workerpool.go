@@ -35,10 +35,9 @@ type Job interface {
 }
 
 type UpdateOrderJob struct {
-	dbStorage            postgres.DBStorager
-	accrualSystemAddress string
-	orderNumber          string
-	client               *resty.Client
+	dbStorage   postgres.DBStorager
+	orderNumber string
+	client      *resty.Client
 }
 
 func NewWorkerpool(dbStorage *postgres.DBStorager, accrualSystemAddress string) *Workerpool {
@@ -55,7 +54,7 @@ func (j *UpdateOrderJob) Run(ctx context.Context) error {
 		SetHeader("Accept", "application/json").
 		SetError(&responseErr).
 		SetResult(&order).
-		Get(j.accrualSystemAddress + "/api/orders/" + j.orderNumber)
+		Get("/api/orders/" + j.orderNumber)
 	if err != nil {
 		return err
 	}
@@ -95,8 +94,7 @@ func (w *Workerpool) runPool(ctx context.Context, jobs chan Job) error {
 func (w *Workerpool) Start(ctx context.Context, inputCh chan string) {
 	jobs := make(chan Job)
 
-	// make resty client, pass it to UpdateOrderJob
-	client := resty.New()
+	client := resty.New().SetBaseURL(w.accrualSystemAddress)
 
 	go func() {
 		for inputCh != nil {
@@ -105,13 +103,12 @@ func (w *Workerpool) Start(ctx context.Context, inputCh chan string) {
 				inputCh = nil
 				continue
 			}
-			// send request to get to know status
+
 			jobs <- &UpdateOrderJob{
 				dbStorage:   w.dbStorage,
 				orderNumber: v,
 				client:      client,
 			}
-
 		}
 	}()
 
