@@ -40,7 +40,14 @@ func (s *dbStorage) Ping(ctx context.Context) error {
 }
 
 func (s *dbStorage) UpdateOrder(ctx context.Context, orderNumber string, orderStatus int, accrual float64) error {
-	if _, err := s.dbpool.Exec(ctx, "UPDATE orders SET status = $1, accrual = $2 WHERE number = $3", orderStatus, accrual, orderNumber); err != nil {
+	if accrual != 0 {
+		if _, err := s.dbpool.Exec(ctx, "UPDATE orders SET status = $1, accrual = $2 WHERE number = $3", orderStatus, accrual, orderNumber); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if _, err := s.dbpool.Exec(ctx, "UPDATE orders SET status = $1 WHERE number = $2", orderStatus, orderNumber); err != nil {
 		return err
 	}
 	return nil
