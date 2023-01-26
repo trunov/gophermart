@@ -50,7 +50,7 @@ func main() {
 	workerpool := NewWorkerpool(&dbStorage, cfg.AccrualSystemAddress)
 
 	inputCh := make(chan string)
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(20 * time.Second)
 	done := make(chan bool)
 
 	go func() {
