@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/go-chi/jwtauth"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -170,9 +171,17 @@ func (s *dbStorage) GetUserBalance(ctx context.Context, userID string) (util.Get
 		return userBalance, err
 	}
 
-	err = s.dbpool.QueryRow(ctx, "SELECT SUM(amount) from withdrawal WHERE user_id = $1", userID).Scan(&userBalance.Withdrawn)
+	var nullFloat sql.NullFloat64
+
+	err = s.dbpool.QueryRow(ctx, "SELECT SUM(amount) from withdrawal WHERE user_id = $1", userID).Scan(&nullFloat)
 	if err != nil {
 		return userBalance, err
+	}
+
+	if nullFloat.Valid {
+		userBalance.Withdrawn = nullFloat.Float64
+	} else {
+		userBalance.Withdrawn = 0
 	}
 
 	return userBalance, nil
