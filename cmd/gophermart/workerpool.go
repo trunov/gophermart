@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/trunov/gophermart/internal/app/postgres"
+	"github.com/trunov/gophermart/internal/app/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -19,9 +20,9 @@ type MyAPIError struct {
 }
 
 type OrderInfo struct {
-	Order   string `json:"order"`
-	Status  string `json:"status"`
-	Accrual string `json:"accrual"`
+	Order   string  `json:"order"`
+	Status  string  `json:"status"`
+	Accrual float64 `json:"accrual"`
 }
 
 type Workerpool struct {
@@ -47,26 +48,26 @@ func NewWorkerpool(dbStorage *postgres.DBStorager, accrualSystemAddress string) 
 func (j *UpdateOrderJob) Run(ctx context.Context) error {
 	fmt.Printf("job %s has started\n", j.orderNumber)
 
-	// go to accrual service /api/orders/{number}
 	var responseErr MyAPIError
 	var order OrderInfo
 
 	_, err := j.client.R().
 		SetError(&responseErr).
 		SetResult(&order).
-		Get(j.accrualSystemAddress + "/" + j.orderNumber)
-
+		Get(j.accrualSystemAddress + "/api/orders/" + j.orderNumber)
 	if err != nil {
-		fmt.Println(responseErr)
-		panic(err)
+		return err
 	}
 
-	fmt.Println(order)
+	status, err := util.FindKeyByValue(order.Status)
+	if err != nil {
+		return err
+	}
 
-	// err := j.dbStorage.UpdateOrder(ctx, j.orderNumber, j.orderStatus)
-	// if err != nil {
-	// 	return err
-	// }
+	err = j.dbStorage.UpdateOrder(ctx, order.Order, status, order.Accrual)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

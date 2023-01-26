@@ -8,13 +8,6 @@ import (
 	"github.com/trunov/gophermart/internal/app/util"
 )
 
-var OrderStatusesMap = map[int]string{
-	1: "NEW",
-	2: "PROCCESSING",
-	3: "INVALID",
-	4: "PROCESSED",
-}
-
 type DBStorager interface {
 	Ping(ctx context.Context) error
 	RegisterUser(ctx context.Context, login, password string) (string, error)
@@ -22,7 +15,7 @@ type DBStorager interface {
 	CreateOrder(ctx context.Context, number, userID string) error
 	GetOrdersByUser(ctx context.Context, userID string) ([]util.GetOrderResponse, error)
 	GetOrders(ctx context.Context) ([]util.GetOrderResponse, error)
-	UpdateOrder(ctx context.Context, orderNumber string, orderStatus int) error
+	UpdateOrder(ctx context.Context, orderNumber string, orderStatus int, accrual float64) error
 	GetUserBalance(ctx context.Context, userID string) (util.GetUserBalanceResponse, error)
 	Withdraw(ctx context.Context, sum float64, orderID, userID string) error
 	GetUserWithdrawals(ctx context.Context, userID string) ([]util.GetUserWithdrawalResponse, error)
@@ -45,7 +38,10 @@ func (s *dbStorage) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (s *dbStorage) UpdateOrder(ctx context.Context, orderNumber string, orderStatus int) error {
+func (s *dbStorage) UpdateOrder(ctx context.Context, orderNumber string, orderStatus int, accrual float64) error {
+	if _, err := s.dbpool.Exec(ctx, "UPDATE orders SET status = $1, accrual = $2 WHERE id = $3", orderStatus, accrual, orderNumber); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -122,7 +118,7 @@ func (s *dbStorage) GetOrdersByUser(ctx context.Context, userID string) ([]util.
 		if err != nil {
 			return orders, err
 		}
-		order.Status = OrderStatusesMap[status]
+		order.Status = util.OrderStatusesMap[status]
 
 		orders = append(orders, order)
 	}
@@ -153,7 +149,7 @@ func (s *dbStorage) GetOrders(ctx context.Context) ([]util.GetOrderResponse, err
 		if err != nil {
 			return orders, err
 		}
-		order.Status = OrderStatusesMap[status]
+		order.Status = util.OrderStatusesMap[status]
 
 		orders = append(orders, order)
 	}

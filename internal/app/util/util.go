@@ -9,6 +9,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var OrderStatusesMap = map[int]string{
+	1: "NEW",
+	2: "PROCESSING",
+	3: "INVALID",
+	4: "PROCESSED",
+}
+
 type GetOrderResponse struct {
 	Number    string    `json:"number"`
 	Status    string    `json:"status"`
@@ -29,6 +36,7 @@ type GetUserWithdrawalResponse struct {
 
 var ErrIncorrectPassword error = errors.New("password is incorrect")
 var ErrInsufficientAmount error = errors.New("insufficient amount of balance")
+var ErrNoKeyPresented error = errors.New("key was not found in the map")
 
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -56,4 +64,13 @@ func GenerateToken(tokenAuth *jwtauth.JWTAuth, id string) (string, error) {
 	}
 
 	return token, nil
+}
+
+func FindKeyByValue(value string) (int, error) {
+	for k, v := range OrderStatusesMap {
+		if v == value {
+			return k, nil
+		}
+	}
+	return 0, ErrNoKeyPresented
 }
