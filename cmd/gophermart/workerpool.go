@@ -52,6 +52,7 @@ func (j *UpdateOrderJob) Run(ctx context.Context) error {
 	var order OrderInfo
 
 	_, err := j.client.R().
+		SetHeader("Accept", "application/json").
 		SetError(&responseErr).
 		SetResult(&order).
 		Get(j.accrualSystemAddress + "/api/orders/" + j.orderNumber)
