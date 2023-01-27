@@ -183,7 +183,6 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// TODO: fix error when user balance is null
 func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 
@@ -351,12 +350,20 @@ func NewRouter(h *Handler) chi.Router {
 		r.Use(jwtauth.Verifier(tokenAuth))
 		r.Use(jwtauth.Authenticator)
 
-		// TODO: refactor; group into /api/user and /balance
-		r.Post("/api/user/orders", h.CreateOrder)
-		r.Get("/api/user/orders", h.GetOrders)
-		r.Get("/api/user/balance", h.GetUserBalance)
-		r.Post("/api/user/balance/withdraw", h.Withdraw)
-		r.Get("/api/user/withdrawals", h.GetWithdrawals)
+		r.Route("/api/user", func(r chi.Router) {
+			r.Route("/orders", func(r chi.Router) {
+				r.Post("/", h.CreateOrder)
+				r.Get("/", h.GetOrders)
+			})
+
+			r.Route("/balance", func(r chi.Router) {
+				r.Get("/", h.GetUserBalance)
+				r.Post("/withdraw", h.Withdraw)
+			})
+
+			r.Get("withdrawals", h.GetWithdrawals)
+		})
+
 	})
 
 	r.Get("/ping", h.PingDB)

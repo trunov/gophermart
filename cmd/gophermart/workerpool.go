@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"runtime"
 	"time"
@@ -45,8 +44,6 @@ func NewWorkerpool(dbStorage *postgres.DBStorager, accrualSystemAddress string) 
 }
 
 func (j *UpdateOrderJob) Run(ctx context.Context) error {
-	fmt.Printf("job %s has started\n", j.orderNumber)
-
 	var responseErr MyAPIError
 	var order OrderInfo
 
