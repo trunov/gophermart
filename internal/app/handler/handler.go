@@ -361,7 +361,7 @@ func NewRouter(h *Handler) chi.Router {
 				r.Post("/withdraw", h.Withdraw)
 			})
 
-			r.Get("withdrawals", h.GetWithdrawals)
+			r.Get("/withdrawals", h.GetWithdrawals)
 		})
 
 	})
