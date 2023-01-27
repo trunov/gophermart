@@ -59,9 +59,9 @@ func (s *dbStorage) UpdateOrder(ctx context.Context, orderNumber string, orderSt
 			return err
 		}
 
-		if _, err = tx.Exec(ctx, "UPDATE users SET balance = balance + $1 WHERE id = $2", accrual, userID); err != nil {
-			return err
-		}
+		// if _, err = tx.Exec(ctx, "UPDATE users SET balance = balance + $1 WHERE id = $2", accrual, userID); err != nil {
+		// 	return err
+		// }
 
 		err = tx.Commit(ctx)
 		if err != nil {
