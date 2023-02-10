@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -114,12 +115,25 @@ func (h *Handler) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.dbStorage.AuthenticateUser(ctx, tokenAuth, loginReq.Login, loginReq.Password)
+	user, err := h.dbStorage.AuthenticateUser(ctx, tokenAuth, loginReq.Login, loginReq.Password)
 	if err != nil {
-		if err == util.ErrIncorrectPassword || err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		h.logger.Err(err).Msg("Something went wrong")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	ok := util.CheckPasswordHash(loginReq.Password, user.Hash)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	token, err := util.GenerateToken(tokenAuth, user.UserID)
+	if err != nil {
 		h.logger.Err(err).Msg("Something went wrong")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -251,7 +265,7 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	err = h.dbStorage.Withdraw(ctx, wReq.Sum, userID.(string), wReq.Order)
 
 	if err != nil {
-		if err == util.ErrInsufficientAmount {
+		if errors.Is(err, util.ErrInsufficientAmount) {
 			w.WriteHeader(http.StatusPaymentRequired)
 			return
 		}

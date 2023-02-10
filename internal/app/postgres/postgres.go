@@ -13,7 +13,7 @@ import (
 type DBStorager interface {
 	Ping(ctx context.Context) error
 	RegisterUser(ctx context.Context, login, password string) (string, error)
-	AuthenticateUser(ctx context.Context, tokenAuth *jwtauth.JWTAuth, login, password string) (string, error)
+	AuthenticateUser(ctx context.Context, tokenAuth *jwtauth.JWTAuth, login, password string) (AuthenticateUser, error)
 	CreateOrder(ctx context.Context, number, userID string) error
 	GetOrdersByUser(ctx context.Context, userID string) ([]util.GetOrderResponse, error)
 	GetOrders(ctx context.Context) ([]util.GetOrderResponse, error)
@@ -25,6 +25,11 @@ type DBStorager interface {
 
 type dbStorage struct {
 	dbpool *pgxpool.Pool
+}
+
+type AuthenticateUser struct {
+	Hash   string
+	UserID string
 }
 
 func NewDBStorage(conn *pgxpool.Pool) *dbStorage {
@@ -41,39 +46,40 @@ func (s *dbStorage) Ping(ctx context.Context) error {
 }
 
 func (s *dbStorage) UpdateOrder(ctx context.Context, orderNumber string, orderStatus int, accrual float64) error {
-	if accrual != 0 {
-		var userID string
-		err := s.dbpool.QueryRow(ctx, "SELECT user_id from orders WHERE number = $1", orderNumber).Scan(&userID)
-		if err != nil {
-			return err
-		}
-
-		tx, err := s.dbpool.Begin(ctx)
-		if err != nil {
-			return err
-		}
-
-		defer tx.Rollback(ctx)
-
-		if _, err := tx.Exec(ctx, "UPDATE orders SET status = $1, accrual = $2 WHERE number = $3", orderStatus, accrual, orderNumber); err != nil {
-			return err
-		}
-
-		if _, err = tx.Exec(ctx, "UPDATE users SET balance = balance + $1 WHERE id = $2", accrual, userID); err != nil {
-			return err
-		}
-
-		err = tx.Commit(ctx)
-		if err != nil {
+	if accrual == 0 {
+		if _, err := s.dbpool.Exec(ctx, "UPDATE orders SET status = $1 WHERE number = $2", orderStatus, orderNumber); err != nil {
 			return err
 		}
 
 		return nil
 	}
 
-	if _, err := s.dbpool.Exec(ctx, "UPDATE orders SET status = $1 WHERE number = $2", orderStatus, orderNumber); err != nil {
+	var userID string
+	err := s.dbpool.QueryRow(ctx, "SELECT user_id from orders WHERE number = $1", orderNumber).Scan(&userID)
+	if err != nil {
 		return err
 	}
+
+	tx, err := s.dbpool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, "UPDATE orders SET status = $1, accrual = $2 WHERE number = $3", orderStatus, accrual, orderNumber); err != nil {
+		return err
+	}
+
+	if _, err = tx.Exec(ctx, "UPDATE users SET balance = balance + $1 WHERE id = $2", accrual, userID); err != nil {
+		return err
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -97,29 +103,15 @@ func (s *dbStorage) RegisterUser(ctx context.Context, login, password string) (s
 	return userID, nil
 }
 
-func (s *dbStorage) AuthenticateUser(ctx context.Context, tokenAuth *jwtauth.JWTAuth, login, password string) (string, error) {
-	var User struct {
-		Hash   string
-		UserID string
-	}
+func (s *dbStorage) AuthenticateUser(ctx context.Context, tokenAuth *jwtauth.JWTAuth, login, password string) (AuthenticateUser, error) {
+	var User AuthenticateUser
 
 	err := s.dbpool.QueryRow(ctx, "SELECT password, id from users WHERE login = $1", login).Scan(&User.Hash, &User.UserID)
 	if err != nil {
-		return "", err
+		return User, err
 	}
 
-	ok := util.CheckPasswordHash(password, User.Hash)
-
-	if !ok {
-		return "", util.ErrIncorrectPassword
-	}
-
-	token, err := util.GenerateToken(tokenAuth, User.UserID)
-	if err != nil {
-		return "", err
-	}
-
-	return token, nil
+	return User, nil
 }
 
 func (s *dbStorage) CreateOrder(ctx context.Context, number, userID string) error {

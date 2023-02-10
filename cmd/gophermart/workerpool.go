@@ -94,13 +94,7 @@ func (w *Workerpool) Start(ctx context.Context, inputCh chan string) {
 	client := resty.New().SetBaseURL(w.accrualSystemAddress)
 
 	go func() {
-		for inputCh != nil {
-			v, ok := <-inputCh
-			if !ok {
-				inputCh = nil
-				continue
-			}
-
+		for v := range inputCh {
 			jobs <- &UpdateOrderJob{
 				dbStorage:   w.dbStorage,
 				orderNumber: v,

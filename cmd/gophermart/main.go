@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/trunov/gophermart/logger"
-	"github.com/trunov/gophermart/migrate"
 
 	"github.com/trunov/gophermart/internal/app/config"
-	"github.com/trunov/gophermart/internal/app/postgres"
+	"github.com/trunov/gophermart/internal/app/repo"
 )
 
 func main() {
@@ -24,28 +22,13 @@ func main() {
 			Msgf("Failed to read the config.")
 	}
 
-	var dbStorage postgres.DBStorager
-
-	if cfg.DatabaseURI != "" {
-		var err error
-
-		dbpool, err := pgxpool.Connect(ctx, cfg.DatabaseURI)
-		if err != nil {
-			l.Fatal().Err(err)
-		}
-		defer dbpool.Close()
-
-		dbStorage = postgres.NewDBStorage(dbpool)
-
-		err = migrate.Migrate(cfg.DatabaseURI, migrate.Migrations)
-		if err != nil {
-			l.Fatal().
-				Err(err).
-				Msgf("Failed to run migrations.")
-		}
-	} else {
-		l.Fatal().Msgf("Cannot start database. Please provide DatabaseURI")
+	dbStorage, dbpool, err := repo.CreateRepo(ctx, cfg)
+	if err != nil {
+		l.Fatal().
+			Err(err).
+			Msgf("Error occurred while repository was initiating.")
 	}
+	defer dbpool.Close()
 
 	workerpool := NewWorkerpool(&dbStorage, cfg.AccrualSystemAddress)
 
