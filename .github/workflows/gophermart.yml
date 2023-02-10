@@ -12,7 +12,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    container: golang:1.19
+    container: golang:1.19.4
 
     services:
       postgres:
